@@ -16,7 +16,8 @@
   <a href="#what-is-ontoclaw">What is it?</a> •
   <a href="#how-it-works">How it works</a> •
   <a href="#installation">Installation</a> •
-  <a href="#cli-commands">CLI Commands</a>
+  <a href="#cli-commands">CLI Commands</a> •
+  <a href="#local-mcp-server">Local MCP Server</a>
 </p>
 
 <p align="center">
@@ -175,7 +176,7 @@ The classification is **automatic** - you don't specify it. If a skill has code 
 | Component | Language | Status | Description |
 |-----------|----------|--------|-------------|
 | [compiler/](compiler/) | Python | ✅ Ready | Skill compiler to OWL 2 ontology |
-| [mcp/](mcp/) | Rust | 🚧 Planned | Fast MCP server for ontology queries |
+| [mcp/](mcp/) | Rust | ✅ Ready | Local MCP server for semantic skill discovery, planning, and payload lookup |
 | skills/ | Markdown | ✅ Ready | Input skill definitions |
 | semantic-skills/ | Turtle | Generated | Compiled ontology output |
 | specs/ | Turtle | ✅ Ready | SHACL shapes constitution |
@@ -205,6 +206,14 @@ pip install -e ".[dev]"
 | `pyshacl>=0.25.0` | SHACL validation |
 | `rich>=13.0.0` | Terminal formatting |
 | `owlrl>=1.0.0` | OWL reasoning |
+
+### MCP Dependencies
+
+The local MCP server in [mcp/](mcp/) is a standalone Rust crate built with:
+
+- `oxigraph` for Turtle loading and SPARQL querying
+- `serde` / `serde_json` for MCP message handling
+- `walkdir` for recursive ontology loading
 
 ---
 
@@ -243,6 +252,70 @@ ontoclaw security-audit
 | `-y, --yes` | Skip confirmation |
 | `-v, --verbose` | Debug logging |
 | `-q, --quiet` | Suppress progress |
+
+---
+
+## Local MCP Server
+
+OntoClaw now includes a **local Rust MCP server** under [mcp/](mcp/).
+
+The MCP server is intentionally focused on:
+
+- skill discovery from compiled ontologies
+- semantic lookup by intent, dependency, and state transitions
+- planning support from `requiresState` and `yieldsState`
+- payload lookup for the calling agent
+
+The server does **not** execute skill payloads. Payload execution is delegated to the calling agent in its own runtime context.
+
+### Implemented MCP Tools
+
+- `list_skills`
+- `find_skills_by_intent`
+- `get_skill`
+- `get_skill_requirements`
+- `get_skill_transitions`
+- `get_skill_dependencies`
+- `get_skill_conflicts`
+- `find_skills_yielding_state`
+- `find_skills_requiring_state`
+- `check_skill_applicability`
+- `plan_from_intent`
+- `get_skill_payload`
+
+### Run The MCP Server
+
+From the repository root:
+
+```bash
+cargo run --manifest-path mcp/Cargo.toml
+```
+
+The server auto-discovers `semantic-skills/` by looking in the current directory and its parents.
+
+To force a specific ontology root:
+
+```bash
+cargo run --manifest-path mcp/Cargo.toml -- --ontology-root ./semantic-skills
+```
+
+### Claude Code Guide
+
+For full setup and verification steps with Claude Code, see [mcp/CLAUDE_CODE_GUIDE.md](mcp/CLAUDE_CODE_GUIDE.md).
+
+### MCP Smoke Checks
+
+```bash
+cd mcp
+cargo test
+```
+
+Current Rust test coverage includes:
+
+- intent lookup
+- payload lookup
+- planning with preparatory skills
+- planner preference for direct skills over setup-heavy alternatives
 
 ---
 
@@ -286,7 +359,10 @@ ontoclaw/
 │   ├── ontoclaw-core.ttl    # Core ontology with states
 │   ├── index.ttl            # Index of all skills
 │   └── */skill.ttl          # Individual skill modules
-└── mcp/                     # (Planned) Rust MCP server
+└── mcp/                     # Rust MCP server
+    ├── Cargo.toml
+    ├── src/main.rs          # MCP stdio server
+    └── src/catalog.rs       # Ontology catalog + planner
 ```
 
 ---
@@ -363,6 +439,11 @@ flowchart LR
 ```bash
 cd compiler
 pytest tests/ -v
+```
+
+```bash
+cd mcp
+cargo test
 ```
 
 **Test Coverage**: 150 tests covering:
